@@ -1,0 +1,19 @@
+{
+  "name": "sporcle-dash-recorder",
+  "version": "0.1.0",
+  "description": "Text-controlled agent that joins your Sporcle Dash team and logs every question.",
+  "type": "module",
+  "private": true,
+  "engines": {
+    "node": ">=22"
+  },
+  "scripts": {
+    "start": "node --env-file-if-exists=.env src/index.js",
+    "console": "MESSENGER=console node --env-file-if-exists=.env src/index.js",
+    "login": "node --env-file-if-exists=.env src/login.js",
+    "test": "node test/e2e.mjs"
+  },
+  "dependencies": {
+    "playwright": "~1.56.1"
+  }
+}

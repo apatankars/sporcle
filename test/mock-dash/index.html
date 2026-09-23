@@ -1,0 +1,91 @@
+<!doctype html>
+<html>
+<head>
+<meta charset="utf-8">
+<title>Mock Dash</title>
+<style>
+  body { font-family: sans-serif; padding: 40px; }
+  .digits input { width: 40px; font-size: 28px; text-align: center; }
+  .question-card { border: 1px solid #ccc; padding: 20px; max-width: 600px; }
+  .hidden { display: none; }
+</style>
+</head>
+<body>
+<!-- A stand-in for sporcle.com/dash, built from the flow described by the
+     user: game code, join team, team code, captain approval, questions
+     (some with multiple parts behind a next arrow). -->
+<main id="app"></main>
+<script>
+const app = document.getElementById('app');
+window.submitClicked = false;
+const questions = [
+  { label: 'Question 1', parts: ['Question 1\nWhat is the capital of France?'] },
+  { label: 'Question 2', parts: [
+    'Question 2\nPart A: Which planet is known as the Red Planet?',
+    'Question 2\nPart B: Which planet has the most moons?',
+    'Question 2\nPart C: Which planet is closest to the sun?',
+  ] },
+  { label: 'Mystery Round', parts: ['Mystery Round\nName the author of "Dune".'] },
+];
+
+function screenGame(err) {
+  app.innerHTML = `<h1>Sporcle Events Answer System</h1>
+    <p>Enter your game code</p>
+    <div class="digits">${'<input maxlength="1" inputmode="numeric">'.repeat(4)}</div>
+    <button id="jg">Join Game</button><p>${err || ''}</p>`;
+  const boxes = [...app.querySelectorAll('input')];
+  boxes.forEach((b, i) => b.addEventListener('input', () => b.value && boxes[i + 1]?.focus()));
+  const go = () => boxes.map((b) => b.value).join('') === '1234' ? screenChoose() : screenGame('Game not found');
+  app.querySelector('#jg').onclick = go;
+}
+
+function screenChoose() {
+  app.innerHTML = `<h1>Game 1234</h1><button id="c">Create a Team</button> <button id="j">Join a Team</button>`;
+  app.querySelector('#c').onclick = () => { app.innerHTML = '<h1>ERROR: bot created a team</h1>'; };
+  app.querySelector('#j').onclick = screenTeam;
+}
+
+function screenTeam() {
+  app.innerHTML = `<h1>Join a Team</h1>
+    <input placeholder="Team code"> <input placeholder="Your name">
+    <button id="r">Request to Join</button>`;
+  app.querySelector('#r').onclick = () => {
+    const [code, name] = [...app.querySelectorAll('input')].map((i) => i.value);
+    if (code !== '654321' || !name) return app.insertAdjacentHTML('beforeend', '<p>Invalid team code</p>');
+    window.joinedAs = name;
+    app.innerHTML = '<h1>Waiting for your captain to approve you…</h1>';
+    setTimeout(() => showQuestion(0), 3000);
+  };
+}
+
+let qi = 0, part = 0, timer;
+function showQuestion(i) {
+  qi = i; part = 0;
+  if (i >= questions.length) {
+    clearInterval(timer);
+    app.innerHTML = '<h1>Game Over</h1><p>Final Standings</p><p>1. Team Awesome</p>';
+    return;
+  }
+  render();
+  setTimeout(() => showQuestion(i + 1), 5000);
+}
+function render() {
+  const q = questions[qi];
+  const multi = q.parts.length > 1;
+  app.innerHTML = `<div class="question-card">
+      ${q.parts[part].split('\n').map((l) => `<p>${l}</p>`).join('')}
+      ${multi ? `<button aria-label="Previous part" ${part === 0 ? 'disabled' : ''}>‹</button>
+                 <button aria-label="Next part" ${part === q.parts.length - 1 ? 'disabled' : ''}>›</button>` : ''}
+    </div>
+    <p class="timer">0:${String(30 - (Date.now() / 1000 | 0) % 30).padStart(2, '0')}</p>
+    <input placeholder="Your answer"> <button id="s">Submit Answer</button>`;
+  app.querySelector('#s').onclick = () => { window.submitClicked = true; };
+  if (multi) {
+    app.querySelector('[aria-label="Next part"]').onclick = () => { part++; render(); };
+    app.querySelector('[aria-label="Previous part"]').onclick = () => { part--; render(); };
+  }
+}
+screenGame();
+</script>
+</body>
+</html>
