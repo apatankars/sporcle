@@ -159,7 +159,7 @@ form.settings { display: flex; flex-direction: column; gap: 10px; }
 .field small { display: block; color: var(--muted); font-size: 12px; line-height: 1.3; }
 .field input[type=number] { width: 72px; padding: 5px 6px; border: 1px solid var(--line); border-radius: 6px; background: var(--bg); font-family: var(--mono); }
 .field input[type=text] { width: 100%; padding: 5px 6px; border: 1px solid var(--line); border-radius: 6px; background: var(--bg); font-family: var(--mono); }
-.field select { padding: 5px 6px; border: 1px solid var(--line); border-radius: 6px; background: var(--bg); max-width: 160px; }
+.field select { padding: 5px 6px; border: 1px solid var(--line); border-radius: 6px; background: var(--bg); max-width: 190px; }
 .field.wide { grid-template-columns: 1fr; }
 .pair { display: flex; gap: 4px; align-items: center; }
 .missed { font-size: 13px; display: flex; flex-direction: column; gap: 6px; max-height: 260px; overflow-y: auto; }
@@ -247,9 +247,9 @@ form.settings { display: flex; flex-direction: column; gap: 10px; }
         <label class="field"><span>Bots<small>0 for solo practice</small></span><input type="number" id="optBots" min="0" max="7" value="3"></label>
         <label class="field">Bot skill
           <select id="optBotSkill">
-            <option value="easy">Casual</option>
-            <option value="medium" selected>Regular</option>
-            <option value="hard">Sweaty</option>
+            <option value="easy">Casual · everyday words</option>
+            <option value="medium" selected>Regular · common words</option>
+            <option value="hard">Sweaty · any word</option>
             <option value="mixed">Mixed</option>
           </select>
         </label>
@@ -307,21 +307,25 @@ form.settings { display: flex; flex-direction: column; gap: 10px; }
   const COLORS = ["#e2531f", "#2f7dd1", "#1f8a5b", "#8a4fd1", "#c7362b", "#b07a00", "#0f8f9e", "#cf3f8a"];
   const BOT_NAMES = ["Pip", "Marlowe", "Juno", "Okafor", "Ines", "Tavi", "Bram", "Sol", "Wren", "Kasimir"];
   const SKILLS = {
-    easy:   { react: [2.2, 6.0], cps: [3.5, 5.5], know: 0.50, bonus: false },
-    medium: { react: [1.1, 3.6], cps: [6, 9],     know: 0.72, bonus: false },
-    hard:   { react: [0.4, 1.6], cps: [10, 15],   know: 0.92, bonus: true },
+    // vocab = how many of the most common English words the bot knows; rare = chance to reach into the full Scrabble list
+    easy:   { react: [2.2, 6.0], cps: [3.5, 5.5], vocab: 6000,  slip: 0.15, rare: 0,    bonus: false },
+    medium: { react: [1.1, 3.6], cps: [6, 9],     vocab: 15000, slip: 0.07, rare: 0,    bonus: false },
+    hard:   { react: [0.4, 1.6], cps: [10, 15],   vocab: 1e9,   slip: 0.02, rare: 0.35, bonus: true },
   };
 
   // ---------- dictionary ----------
-  let WORDS = [], DICT = new Set(), PROMPTS = {};
+  let WORDS = [], DICT = new Set(), PROMPTS = {}, COMMON = [];
   function loadDictionary() {
     if (!window.BP_WORDS) return false;
     WORDS = window.BP_WORDS.split(" ");
     DICT = new Set(WORDS);
     PROMPTS = window.BP_PROMPTS || {};
+    COMMON = (window.BP_COMMON || "").split(" ").filter(Boolean);
     return true;
   }
   const solutions = (p) => WORDS.filter((w) => w.includes(p));
+  // Words containing p, most common first, limited to the `limit` most frequent English words
+  const commonSolutions = (p, limit) => { const out = []; const n = Math.min(limit, COMMON.length); for (let i = 0; i < n; i++) if (COMMON[i].includes(p)) out.push(COMMON[i]); return out; };
 
   // ---------- settings ----------
   const ids = ["optName","optBots","optBotSkill","optDiff","optMinW","optMaxW","optLen","optLives","optMaxLives","optFuseMin","optFuseMax","optMinTurn","optAge","optAlpha","optTimer","optHints","optEndless"];
@@ -518,10 +522,9 @@ form.settings { display: flex; flex-direction: column; gap: 10px; }
     if (!S.endless) p.lives = Math.max(0, p.lives - 1);
     $("boom").classList.remove("go"); void $("boom").offsetWidth; $("boom").classList.add("go");
     boomSound();
-    const ex = solutions(missedPrompt).filter((w) => !G.used.has(w));
     log(`<span class="x">💥 ${esc(p.name)} blew up on <b>${missedPrompt.toUpperCase()}</b></span>${p.lives === 0 && !S.endless ? " · out" : ""}`);
     if (p.human) {
-      const sample = shortSample(ex, 6);
+      const sample = hintSample(missedPrompt, 6);
       G.stats.missed.push({ prompt: missedPrompt, sample });
       renderMissed();
       showMsg(S.hints && sample.length ? `Boom. You could have played ${sample.slice(0, 3).map((w) => w.toUpperCase()).join(", ")}.` : "Boom. You lost a life.", "bad");
@@ -565,12 +568,13 @@ form.settings { display: flex; flex-direction: column; gap: 10px; }
     const sk = SKILLS[p.skill];
     const count = PROMPTS[G.prompt] || 1;
     // Rarer prompts are harder to know: scale knowledge by log of how many words contain it.
-    const chance = Math.min(0.985, sk.know * (0.55 + 0.45 * Math.min(1, Math.log10(count) / 3)) + 0.1);
     const think = rand(sk.react[0], sk.react[1]) * 1000 * (count < 100 ? 1.6 : 1);
     later(() => {
       if (G.turnId !== turnId || G.over) return;
-      let cands = solutions(G.prompt).filter((w) => !G.used.has(w));
-      if (!cands.length || Math.random() > chance) {
+      // Bots only know everyday words, up to their vocabulary size. Sweaty bots sometimes reach for rarer ones.
+      let cands = commonSolutions(G.prompt, sk.vocab).filter((w) => !G.used.has(w));
+      if (!cands.length && Math.random() < sk.rare) cands = solutions(G.prompt).filter((w) => !G.used.has(w));
+      if (!cands.length || Math.random() < sk.slip) {
         // Stall: sometimes type a wrong guess, then give up
         const junk = G.prompt + pick(["s", "er", "ing", "ly", "x"]);
         if (Math.random() < 0.5 && !DICT.has(junk)) typeOut(p, junk, sk, turnId, () => { p.typedState = "bad"; renderSeats(); });
@@ -578,7 +582,8 @@ form.settings { display: flex; flex-direction: column; gap: 10px; }
       }
       const short = cands.filter((w) => w.length <= (p.skill === "easy" ? 8 : 11));
       if (short.length && Math.random() < 0.8) cands = short;
-      let word = pick(cands);
+      // Lean toward the most familiar words (cands is ordered most common first)
+      let word = cands[Math.floor(cands.length * Math.pow(Math.random(), 2))];
       if (sk.bonus) {
         const need = (w) => [...new Set(w)].filter((c) => S.alpha.includes(c) && !p.letters.has(c)).length;
         const sample = Array.from({ length: 25 }, () => pick(cands));
@@ -673,6 +678,11 @@ form.settings { display: flex; flex-direction: column; gap: 10px; }
     const m = G.stats.missed;
     $("missedCount").textContent = m.length;
     $("missed").innerHTML = m.slice().reverse().map((x) => `<div><b>${x.prompt}</b> <span>${S.hints ? x.sample.join(" · ") : ""}</span></div>`).join("");
+  }
+  function hintSample(p, k) {
+    const common = commonSolutions(p, 1e9).filter((w) => !G.used.has(w)).slice(0, 25);
+    if (common.length >= k) { const out = new Set(); while (out.size < k) out.add(pick(common)); return [...out].sort((a, b) => a.length - b.length); }
+    return [...new Set(common.concat(shortSample(solutions(p).filter((w) => !G.used.has(w)), k)))].slice(0, k);
   }
   function shortSample(list, k) {
     const short = list.filter((w) => w.length <= 9);

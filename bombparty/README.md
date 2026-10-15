@@ -18,7 +18,9 @@ Starting lives 2, max lives 3, minimum turn 5 s, prompt difficulty "500+ words" 
 
 ## Practice extras
 
-Optional visible timer, example answers for every prompt you miss, answer-time stats, endless mode, and bots at three skill levels.
+Optional visible timer, example answers for every prompt you miss (the most common words that fit), answer-time stats, endless mode, and bots at three skill levels.
+
+Bots only play words from an everyday-English frequency list: Casual bots know the ~6,000 most common words, Regular ~15,000, and Sweaty all ~34,000 plus the odd obscure Scrabble word when they're stuck. The frequency list is [hermitdave/FrequencyWords](https://github.com/hermitdave/FrequencyWords) (top 50k English words from subtitles, MIT license), filtered to words in the dictionary.
 
 ## Dictionary
 
