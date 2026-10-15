@@ -1,0 +1,732 @@
+<!doctype html>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>BombParty Practice</title>
+<meta name="claude:viewport-fit-sides" content="cover">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Bricolage+Grotesque:opsz,wght@12..96,500;12..96,800&family=Atkinson+Hyperlegible:wght@400;700&family=JetBrains+Mono:wght@500;700&display=swap">
+<style>
+/* Layout: a round felt table with players seated around the bomb; settings and stats sit in a side rail that stacks under it on phones. */
+:root {
+  --bg: #e9edf2;
+  --table: #d6dde7;
+  --surface: #ffffff;
+  --ink: #1b2330;
+  --muted: #5d6878;
+  --line: #c3ccd8;
+  --bomb: #232a36;
+  --bomb-hi: #3b4557;
+  --fuse: #e2531f;
+  --spark: #ffb020;
+  --good: #1f8a5b;
+  --bad: #c7362b;
+  --prompt-bg: #fff4d6;
+  --prompt-ink: #8a4b00;
+  --on-bomb: #c9d2de;
+  --display: "Bricolage Grotesque", "Avenir Next", "Segoe UI", system-ui, sans-serif;
+  --body: "Atkinson Hyperlegible", "Segoe UI", system-ui, sans-serif;
+  --mono: "JetBrains Mono", ui-monospace, "SF Mono", Menlo, Consolas, monospace;
+}
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) {
+    --bg: #141a23; --table: #1c2430; --surface: #222b38; --ink: #e8edf4; --muted: #95a1b3; --line: #344052;
+    --bomb: #0b0f15; --bomb-hi: #2b3444; --fuse: #f26a36; --spark: #ffc04d; --good: #46c08b; --bad: #ff6b5e;
+    --prompt-bg: #3a2c12; --prompt-ink: #ffcf73; --on-bomb: #aab4c3; color-scheme: dark;
+  }
+}
+:root[data-theme="dark"] {
+  --bg: #141a23; --table: #1c2430; --surface: #222b38; --ink: #e8edf4; --muted: #95a1b3; --line: #344052;
+  --bomb: #0b0f15; --bomb-hi: #2b3444; --fuse: #f26a36; --spark: #ffc04d; --good: #46c08b; --bad: #ff6b5e;
+  --prompt-bg: #3a2c12; --prompt-ink: #ffcf73; --on-bomb: #aab4c3; color-scheme: dark;
+}
+* { box-sizing: border-box; }
+[hidden] { display: none !important; }
+html, body { height: 100%; }
+body {
+  margin: 0; background: var(--bg); color: var(--ink); font: 15px/1.5 var(--body);
+  padding-left: max(16px, env(safe-area-inset-left, 0px));
+  padding-right: max(16px, env(safe-area-inset-right, 0px));
+  padding-block: 16px;
+}
+button, input, select { font: inherit; color: inherit; }
+:focus-visible { outline: 3px solid var(--spark); outline-offset: 2px; }
+
+.app { max-width: 1180px; margin: 0 auto; display: grid; grid-template-columns: minmax(0, 1fr) 320px; gap: 20px; align-items: start; }
+@media (max-width: 900px) { .app { grid-template-columns: minmax(0, 1fr); } }
+
+header.top { grid-column: 1 / -1; display: flex; flex-wrap: wrap; align-items: baseline; justify-content: space-between; gap: 8px 16px; }
+h1 { font: 800 clamp(26px, 4vw, 38px)/1 var(--display); letter-spacing: -0.02em; margin: 0; text-wrap: balance; }
+h1 span { color: var(--fuse); }
+.tagline { color: var(--muted); margin: 0; }
+.tools { display: flex; gap: 8px; }
+
+/* ---- table ---- */
+.stage { display: flex; flex-direction: column; gap: 14px; min-width: 0; }
+.table {
+  position: relative; width: 100%; max-width: 680px; aspect-ratio: 1 / 1; margin: 0 auto;
+  border-radius: 50%; background: radial-gradient(circle at 50% 45%, var(--surface) 0%, var(--table) 70%);
+  border: 1px solid var(--line);
+}
+.bomb-wrap { position: absolute; left: 50%; top: 50%; width: 34%; aspect-ratio: 1; transform: translate(-50%, -50%); }
+.bomb-wrap svg { width: 100%; height: 100%; overflow: visible; }
+.bomb-body { fill: var(--bomb); }
+.bomb-shine { fill: var(--bomb-hi); }
+.fuse { stroke: var(--muted); stroke-width: 5; fill: none; stroke-linecap: round; }
+.spark { fill: var(--spark); }
+.ring-bg { fill: none; stroke: var(--line); stroke-width: 4; }
+.ring { fill: none; stroke: var(--fuse); stroke-width: 4; stroke-linecap: round; transition: stroke 0.2s; }
+.prompt {
+  position: absolute; left: 50%; top: 57%; transform: translate(-50%, -50%);
+  font: 700 clamp(22px, 5.4vw, 40px)/1 var(--mono); letter-spacing: 0.04em; text-transform: uppercase;
+  color: var(--prompt-ink); background: var(--prompt-bg); padding: 0.18em 0.4em; border-radius: 10px;
+  white-space: nowrap;
+}
+.prompt-count { position: absolute; left: 50%; top: 79%; transform: translateX(-50%); font: 500 11px/1 var(--mono); color: var(--on-bomb); white-space: nowrap; letter-spacing: 0.04em; }
+.arrow { position: absolute; inset: 0; pointer-events: none; transition: transform 0.25s cubic-bezier(.5,1.6,.5,1); }
+.arrow::after {
+  content: ""; position: absolute; left: 50%; top: 26%; width: 0; height: 0;
+  border-left: 11px solid transparent; border-right: 11px solid transparent; border-bottom: 22px solid var(--fuse);
+  transform: translateX(-50%);
+}
+.bomb-wrap.shake { animation: shake 0.12s infinite; }
+@keyframes shake { 0%,100% { transform: translate(-50%,-50%) rotate(0); } 25% { transform: translate(-51%,-50%) rotate(-2deg); } 75% { transform: translate(-49%,-50%) rotate(2deg); } }
+.boom { position: absolute; left: 50%; top: 50%; width: 46%; aspect-ratio: 1; transform: translate(-50%,-50%) scale(0.2); border-radius: 50%;
+  background: radial-gradient(circle, var(--spark) 0%, var(--fuse) 45%, transparent 70%); opacity: 0; pointer-events: none; }
+.boom.go { animation: boom 0.6s ease-out; }
+@keyframes boom { 0% { opacity: 1; transform: translate(-50%,-50%) scale(0.2); } 100% { opacity: 0; transform: translate(-50%,-50%) scale(1.6); } }
+
+.seat {
+  position: absolute; width: 150px; transform: translate(-50%, -50%);
+  display: flex; flex-direction: column; align-items: center; gap: 2px; text-align: center;
+}
+.seat .name { font: 700 14px/1.2 var(--display); max-width: 100%; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.seat .avatar { width: 42px; height: 42px; border-radius: 50%; display: grid; place-items: center; font: 800 18px/1 var(--display); color: #fff; }
+.seat.turn .avatar { box-shadow: 0 0 0 4px var(--fuse); }
+.seat.dead { opacity: 0.4; }
+.seat .lives { font-size: 14px; letter-spacing: 1px; color: var(--bad); min-height: 1.3em; }
+.seat .typed { font: 600 14px/1.3 var(--mono); text-transform: uppercase; min-height: 1.3em; max-width: 170px; overflow-wrap: anywhere; }
+.seat .typed mark { background: var(--prompt-bg); color: var(--prompt-ink); border-radius: 3px; }
+.seat .typed.ok { color: var(--good); }
+.seat .typed.bad { color: var(--bad); text-decoration: line-through; }
+@media (max-width: 560px) { .seat { width: 96px; } .seat .avatar { width: 32px; height: 32px; font-size: 14px; } .seat .typed { font-size: 11px; max-width: 100px; } .seat .name { font-size: 12px; } }
+
+.overlay {
+  position: absolute; inset: 18%; border-radius: 50%; display: grid; place-items: center; text-align: center; padding: 6%;
+  background: color-mix(in srgb, var(--surface) 92%, transparent); border: 1px solid var(--line);
+}
+.overlay h2 { font: 800 clamp(20px, 3.4vw, 30px)/1.1 var(--display); margin: 0 0 6px; text-wrap: balance; }
+.overlay p { margin: 0 0 12px; color: var(--muted); }
+
+/* ---- input ---- */
+.entry { display: flex; gap: 8px; max-width: 680px; width: 100%; margin: 0 auto; }
+.entry input {
+  flex: 1; min-width: 0; padding: 12px 14px; border-radius: 10px; border: 2px solid var(--line); background: var(--surface);
+  font: 700 20px/1.2 var(--mono); text-transform: uppercase; letter-spacing: 0.04em;
+}
+.entry input:disabled { opacity: 0.55; }
+.entry input.reject { border-color: var(--bad); animation: nudge 0.25s; }
+.entry input.yourturn { border-color: var(--fuse); }
+@keyframes nudge { 25% { transform: translateX(-6px); } 75% { transform: translateX(6px); } }
+.msg { max-width: 680px; width: 100%; margin: 0 auto; min-height: 1.5em; color: var(--muted); font-size: 14px; }
+.msg.bad { color: var(--bad); } .msg.good { color: var(--good); }
+
+.btn { border: 0; border-radius: 10px; padding: 10px 16px; font-weight: 700; cursor: pointer; background: var(--fuse); color: #fff; }
+.btn.ghost { background: transparent; color: var(--ink); border: 1px solid var(--line); }
+.btn.small { padding: 6px 10px; font-size: 13px; }
+.btn:hover { filter: brightness(1.06); }
+
+/* ---- rail ---- */
+.rail { display: flex; flex-direction: column; gap: 16px; min-width: 0; }
+.panel { background: var(--surface); border: 1px solid var(--line); border-radius: 14px; padding: 14px 16px; }
+.panel h3 { margin: 0 0 10px; font: 700 12px/1 var(--body); text-transform: uppercase; letter-spacing: 0.08em; color: var(--muted); display: flex; justify-content: space-between; gap: 8px; }
+.letters { display: grid; grid-template-columns: repeat(7, 1fr); gap: 5px; }
+.letters span { display: grid; place-items: center; aspect-ratio: 1; border-radius: 6px; font: 700 14px/1 var(--mono); border: 1px solid var(--line); color: var(--muted); }
+.letters span.got { background: var(--good); border-color: var(--good); color: #fff; }
+.stats { display: grid; grid-template-columns: 1fr 1fr; gap: 8px 12px; margin: 0; }
+.stats div { display: flex; flex-direction: column; }
+.stats dt { font-size: 12px; color: var(--muted); }
+.stats dd { margin: 0; font: 700 18px/1.2 var(--mono); font-variant-numeric: tabular-nums; overflow-wrap: anywhere; }
+.log { list-style: none; margin: 0; padding: 0; max-height: 240px; overflow-y: auto; font-size: 13px; display: flex; flex-direction: column; gap: 4px; }
+.log li { overflow-wrap: anywhere; }
+.log .w { font-family: var(--mono); font-weight: 700; text-transform: uppercase; }
+.log mark { background: var(--prompt-bg); color: var(--prompt-ink); border-radius: 3px; }
+.log .x { color: var(--bad); }
+.log .h { color: var(--muted); }
+
+form.settings { display: flex; flex-direction: column; gap: 10px; }
+.field { display: grid; grid-template-columns: minmax(0, 1fr) auto; align-items: center; gap: 8px; font-size: 14px; }
+.field small { display: block; color: var(--muted); font-size: 12px; line-height: 1.3; }
+.field input[type=number] { width: 72px; padding: 5px 6px; border: 1px solid var(--line); border-radius: 6px; background: var(--bg); font-family: var(--mono); }
+.field input[type=text] { width: 100%; padding: 5px 6px; border: 1px solid var(--line); border-radius: 6px; background: var(--bg); font-family: var(--mono); }
+.field select { padding: 5px 6px; border: 1px solid var(--line); border-radius: 6px; background: var(--bg); max-width: 160px; }
+.field.wide { grid-template-columns: 1fr; }
+.pair { display: flex; gap: 4px; align-items: center; }
+.missed { font-size: 13px; display: flex; flex-direction: column; gap: 6px; max-height: 260px; overflow-y: auto; }
+.missed b { font-family: var(--mono); text-transform: uppercase; color: var(--prompt-ink); background: var(--prompt-bg); padding: 0 4px; border-radius: 4px; }
+.missed span { font-family: var(--mono); color: var(--muted); text-transform: lowercase; }
+.rules { font-size: 14px; color: var(--ink); }
+.rules ul { margin: 0; padding-left: 18px; display: flex; flex-direction: column; gap: 4px; }
+@media (prefers-reduced-motion: reduce) { .bomb-wrap.shake, .boom.go, .entry input.reject { animation: none; } .arrow { transition: none; } }
+</style>
+
+<div class="app">
+  <header class="top">
+    <div>
+      <h1>Bomb<span>Party</span> Practice</h1>
+      <p class="tagline">Type a word that contains the letters on the bomb before it goes off.</p>
+    </div>
+    <div class="tools">
+      <button class="btn ghost small" id="endBtn" type="button" hidden>End round</button>
+      <button class="btn ghost small" id="soundBtn" type="button">Sound: off</button>
+    </div>
+  </header>
+
+  <main class="stage">
+    <div class="table" id="table">
+      <div class="arrow" id="arrow" hidden></div>
+      <div class="bomb-wrap" id="bombWrap">
+        <svg viewBox="0 0 200 200" aria-hidden="true">
+          <circle class="ring-bg" id="ringBg" cx="100" cy="112" r="92"></circle>
+          <circle class="ring" id="ring" cx="100" cy="112" r="92" transform="rotate(-90 100 112)" stroke-dasharray="578" stroke-dashoffset="0"></circle>
+          <path class="fuse" d="M118 40 C 130 18, 150 22, 158 8"></path>
+          <circle class="spark" id="spark" cx="158" cy="8" r="6"></circle>
+          <rect class="bomb-body" x="96" y="34" width="34" height="22" rx="4" transform="rotate(28 113 45)"></rect>
+          <circle class="bomb-body" cx="100" cy="115" r="72"></circle>
+          <ellipse class="bomb-shine" cx="74" cy="84" rx="18" ry="11" transform="rotate(-35 74 84)"></ellipse>
+        </svg>
+        <div class="prompt" id="prompt">…</div>
+        <div class="prompt-count" id="promptCount"></div>
+      </div>
+      <div class="boom" id="boom"></div>
+      <div id="seats"></div>
+      <div class="overlay" id="overlay">
+        <div id="overlayInner">
+          <h2>Loading the dictionary…</h2>
+          <p>267,751 words.</p>
+        </div>
+      </div>
+    </div>
+    <form class="entry" id="entryForm" autocomplete="off">
+      <input id="wordInput" type="text" maxlength="40" spellcheck="false" autocapitalize="off" autocorrect="off" placeholder="Wait for your turn" disabled aria-label="Your word">
+      <button class="btn" type="submit" id="submitBtn">Enter</button>
+    </form>
+    <div class="msg" id="msg" role="status" aria-live="polite"></div>
+  </main>
+
+  <aside class="rail">
+    <section class="panel" id="lettersPanel">
+      <h3><span>Bonus letters</span><span id="lettersLeft"></span></h3>
+      <div class="letters" id="letters"></div>
+    </section>
+
+    <section class="panel">
+      <h3><span>Your round</span></h3>
+      <dl class="stats">
+        <div><dt>Words</dt><dd id="sWords">0</dd></div>
+        <div><dt>Avg answer time</dt><dd id="sAvg">–</dd></div>
+        <div><dt>Fastest</dt><dd id="sFast">–</dd></div>
+        <div><dt>Longest word</dt><dd id="sLong">–</dd></div>
+      </dl>
+    </section>
+
+    <section class="panel">
+      <h3><span>Missed prompts</span><span id="missedCount"></span></h3>
+      <div class="missed" id="missed"><span>None yet. When the bomb blows up on you, the prompt shows up here with words you could have used.</span></div>
+    </section>
+
+    <section class="panel">
+      <h3><span>Feed</span></h3>
+      <ul class="log" id="log"></ul>
+    </section>
+
+    <section class="panel">
+      <h3><span>Room settings</span></h3>
+      <form class="settings" id="settings">
+        <label class="field">Your name <input type="text" id="optName" maxlength="16" value="You" style="width:120px"></label>
+        <label class="field"><span>Bots<small>0 for solo practice</small></span><input type="number" id="optBots" min="0" max="7" value="3"></label>
+        <label class="field">Bot skill
+          <select id="optBotSkill">
+            <option value="easy">Casual</option>
+            <option value="medium" selected>Regular</option>
+            <option value="hard">Sweaty</option>
+            <option value="mixed">Mixed</option>
+          </select>
+        </label>
+        <label class="field"><span>Prompt difficulty<small>Words in the dictionary that contain the prompt</small></span>
+          <select id="optDiff">
+            <option value="500">Beginner · 500+</option>
+            <option value="300">Medium · 300+</option>
+            <option value="100">Hard · 100+</option>
+            <option value="50">Very hard · 50+</option>
+            <option value="1">Anything · 1+</option>
+            <option value="custom">Custom range</option>
+          </select>
+        </label>
+        <div class="field" id="customDiff" hidden><span>Custom range</span><span class="pair"><input type="number" id="optMinW" min="1" value="100" aria-label="Minimum words"> – <input type="number" id="optMaxW" min="1" value="99999" aria-label="Maximum words"></span></div>
+        <label class="field">Prompt length
+          <select id="optLen">
+            <option value="23" selected>2–3 letters</option>
+            <option value="2">2 letters</option>
+            <option value="3">3 letters</option>
+          </select>
+        </label>
+        <label class="field"><span>Starting lives</span><input type="number" id="optLives" min="1" max="10" value="2"></label>
+        <label class="field"><span>Max lives</span><input type="number" id="optMaxLives" min="1" max="10" value="3"></label>
+        <div class="field"><span>Bomb fuse<small>Random each new bomb, hidden from players</small></span><span class="pair"><input type="number" id="optFuseMin" min="3" max="120" value="10" aria-label="Shortest fuse"> – <input type="number" id="optFuseMax" min="3" max="120" value="30" aria-label="Longest fuse"> s</span></div>
+        <label class="field"><span>Minimum turn<small>The bomb never passes with less than this left</small></span><span class="pair"><input type="number" id="optMinTurn" min="1" max="30" value="5"> s</span></label>
+        <label class="field"><span>Prompt changes after<small>Failed turns on the same prompt</small></span><input type="number" id="optAge" min="1" max="10" value="2"></label>
+        <label class="field wide"><span>Bonus alphabet<small>Use every one of these letters to win a life</small></span><input type="text" id="optAlpha" value="abcdefghijlmnopqrstuv"></label>
+        <label class="field"><span>Show the timer<small>Off matches JKLM</small></span><input type="checkbox" id="optTimer"></label>
+        <label class="field"><span>Show answers when you miss</span><input type="checkbox" id="optHints" checked></label>
+        <label class="field"><span>Endless (no lives lost)</span><input type="checkbox" id="optEndless"></label>
+        <button class="btn" type="submit">Start new round</button>
+      </form>
+    </section>
+
+    <section class="panel rules">
+      <h3><span>How BombParty works</span></h3>
+      <ul>
+        <li>The bomb shows a prompt of 2–3 letters. On your turn, type any word that contains them in that order, then press Enter.</li>
+        <li>A word can only be used once per round.</li>
+        <li>Answer and the bomb passes to the next player. The fuse keeps burning between turns and is hidden, so nobody knows when it will go off.</li>
+        <li>If it explodes in your hands you lose a life. The last player standing wins.</li>
+        <li>Use every letter in the bonus alphabet (A–V without K by default) across your words to earn an extra life, up to the max.</li>
+      </ul>
+    </section>
+  </aside>
+</div>
+
+<script src="words.js"></script>
+<script>
+(() => {
+  "use strict";
+  const $ = (id) => document.getElementById(id);
+  const rand = (a, b) => a + Math.random() * (b - a);
+  const pick = (arr) => arr[Math.floor(Math.random() * arr.length)];
+  const COLORS = ["#e2531f", "#2f7dd1", "#1f8a5b", "#8a4fd1", "#c7362b", "#b07a00", "#0f8f9e", "#cf3f8a"];
+  const BOT_NAMES = ["Pip", "Marlowe", "Juno", "Okafor", "Ines", "Tavi", "Bram", "Sol", "Wren", "Kasimir"];
+  const SKILLS = {
+    easy:   { react: [2.2, 6.0], cps: [3.5, 5.5], know: 0.50, bonus: false },
+    medium: { react: [1.1, 3.6], cps: [6, 9],     know: 0.72, bonus: false },
+    hard:   { react: [0.4, 1.6], cps: [10, 15],   know: 0.92, bonus: true },
+  };
+
+  // ---------- dictionary ----------
+  let WORDS = [], DICT = new Set(), PROMPTS = {};
+  function loadDictionary() {
+    if (!window.BP_WORDS) return false;
+    WORDS = window.BP_WORDS.split(" ");
+    DICT = new Set(WORDS);
+    PROMPTS = window.BP_PROMPTS || {};
+    return true;
+  }
+  const solutions = (p) => WORDS.filter((w) => w.includes(p));
+
+  // ---------- settings ----------
+  const ids = ["optName","optBots","optBotSkill","optDiff","optMinW","optMaxW","optLen","optLives","optMaxLives","optFuseMin","optFuseMax","optMinTurn","optAge","optAlpha","optTimer","optHints","optEndless"];
+  function saveSettings() {
+    const o = {};
+    ids.forEach((id) => { const el = $(id); o[id] = el.type === "checkbox" ? el.checked : el.value; });
+    try { localStorage.setItem("bp-settings", JSON.stringify(o)); } catch (e) {}
+  }
+  function restoreSettings() {
+    let o = null;
+    try { o = JSON.parse(localStorage.getItem("bp-settings")); } catch (e) {}
+    if (!o) return;
+    ids.forEach((id) => { if (id in o) { const el = $(id); if (el.type === "checkbox") el.checked = !!o[id]; else el.value = o[id]; } });
+  }
+  function readSettings() {
+    const num = (id, lo, hi, d) => { const v = parseFloat($(id).value); return isFinite(v) ? Math.min(hi, Math.max(lo, v)) : d; };
+    let minW, maxW = Infinity;
+    if ($("optDiff").value === "custom") { minW = num("optMinW", 1, 1e6, 100); maxW = num("optMaxW", 1, 1e6, 1e6); }
+    else minW = parseInt($("optDiff").value, 10);
+    const lives = num("optLives", 1, 10, 2);
+    const fuseA = num("optFuseMin", 3, 120, 10), fuseB = num("optFuseMax", 3, 120, 30);
+    const alpha = [...new Set(($("optAlpha").value.toLowerCase().match(/[a-z]/g) || []))].sort();
+    return {
+      name: ($("optName").value.trim() || "You").slice(0, 16),
+      bots: Math.round(num("optBots", 0, 7, 3)),
+      skill: $("optBotSkill").value,
+      minW, maxW: Math.max(minW, maxW),
+      lens: $("optLen").value === "23" ? [2, 3] : [parseInt($("optLen").value, 10)],
+      lives, maxLives: Math.max(lives, num("optMaxLives", 1, 10, 3)),
+      fuse: [Math.min(fuseA, fuseB), Math.max(fuseA, fuseB)],
+      minTurn: num("optMinTurn", 1, 30, 5),
+      age: Math.round(num("optAge", 1, 10, 2)),
+      alpha: alpha.length ? alpha : "abcdefghijlmnopqrstuv".split(""),
+      showTimer: $("optTimer").checked,
+      hints: $("optHints").checked,
+      endless: $("optEndless").checked,
+    };
+  }
+
+  // ---------- sound ----------
+  let audio = null, soundOn = false;
+  function tone(freq, dur, type = "sine", vol = 0.15, slide = 0) {
+    if (!soundOn || !audio) return;
+    const t = audio.currentTime, o = audio.createOscillator(), g = audio.createGain();
+    o.type = type; o.frequency.setValueAtTime(freq, t);
+    if (slide) o.frequency.exponentialRampToValueAtTime(Math.max(20, freq + slide), t + dur);
+    g.gain.setValueAtTime(vol, t); g.gain.exponentialRampToValueAtTime(0.0001, t + dur);
+    o.connect(g).connect(audio.destination); o.start(t); o.stop(t + dur);
+  }
+  function boomSound() {
+    if (!soundOn || !audio) return;
+    const len = audio.sampleRate * 0.6, buf = audio.createBuffer(1, len, audio.sampleRate), d = buf.getChannelData(0);
+    for (let i = 0; i < len; i++) d[i] = (Math.random() * 2 - 1) * Math.pow(1 - i / len, 2.5);
+    const s = audio.createBufferSource(), f = audio.createBiquadFilter(), g = audio.createGain();
+    f.type = "lowpass"; f.frequency.value = 900; g.gain.value = 0.6;
+    s.buffer = buf; s.connect(f).connect(g).connect(audio.destination); s.start();
+  }
+  $("soundBtn").addEventListener("click", () => {
+    soundOn = !soundOn;
+    if (soundOn && !audio) { try { audio = new (window.AudioContext || window.webkitAudioContext)(); } catch (e) { soundOn = false; } }
+    if (audio && audio.state === "suspended") audio.resume();
+    $("soundBtn").textContent = "Sound: " + (soundOn ? "on" : "off");
+    tone(660, 0.08);
+  });
+
+  // ---------- game state ----------
+  let S = null;          // settings for current round
+  let G = null;          // game state
+  let raf = 0;
+
+  function promptPool() {
+    return Object.keys(PROMPTS).filter((p) => S.lens.includes(p.length) && PROMPTS[p] >= S.minW && PROMPTS[p] <= S.maxW);
+  }
+
+  function newGame() {
+    S = readSettings();
+    saveSettings();
+    const pool = promptPool();
+    if (!pool.length) { showMsg("No prompts match that difficulty range. Widen it in Room settings.", "bad"); return; }
+    const skills = ["easy", "medium", "hard"];
+    const names = [...BOT_NAMES].sort(() => Math.random() - 0.5);
+    const players = [{ name: S.name, human: true }];
+    for (let i = 0; i < S.bots; i++) {
+      const sk = S.skill === "mixed" ? skills[i % 3] : S.skill;
+      players.push({ name: names[i], human: false, skill: sk });
+    }
+    players.forEach((p, i) => Object.assign(p, { lives: S.lives, letters: new Set(), typed: "", typedState: "", color: COLORS[i % COLORS.length], words: 0 }));
+    G = {
+      players, pool, cur: 0, prompt: "", promptFails: 0, used: new Set(),
+      bombStart: 0, bombEnd: 0, turnStart: 0, turnId: 0, over: false, botTimers: [],
+      stats: { words: [], times: [], missed: [] },
+    };
+    $("log").innerHTML = ""; $("missed").innerHTML = ""; $("missedCount").textContent = "";
+    $("overlay").hidden = true;
+    $("endBtn").hidden = false;
+    renderSeats(); renderLetters(); renderStats();
+    log(`New round · ${players.length === 1 ? "solo practice" : players.length + " players"} · ${pool.length} possible prompts`, "h");
+    nextPrompt();
+    newBomb();
+    G.cur = Math.floor(Math.random() * players.length);
+    if (players.length === 1) G.cur = 0;
+    startTurn();
+    cancelAnimationFrame(raf); raf = requestAnimationFrame(tick);
+  }
+
+  function nextPrompt() {
+    let p, tries = 0;
+    do { p = pick(G.pool); tries++; } while (p === G.prompt && tries < 10);
+    G.prompt = p; G.promptFails = 0;
+    $("prompt").textContent = p;
+    $("promptCount").textContent = PROMPTS[p].toLocaleString() + " words";
+  }
+  function newBomb() {
+    G.bombStart = performance.now();
+    G.bombEnd = G.bombStart + rand(S.fuse[0], S.fuse[1]) * 1000;
+  }
+  const alive = () => G.players.filter((p) => S.endless || p.lives > 0);
+
+  function startTurn() {
+    G.turnId++;
+    G.turnStart = performance.now();
+    clearBotTimers();
+    const p = G.players[G.cur];
+    p.typed = ""; p.typedState = "";
+    renderSeats();
+    const inp = $("wordInput");
+    if (p.human) {
+      inp.disabled = false; inp.value = ""; inp.placeholder = "Your turn: " + G.prompt.toUpperCase();
+      inp.classList.add("yourturn"); inp.focus();
+      tone(880, 0.07, "triangle", 0.08);
+    } else {
+      inp.disabled = true; inp.value = ""; inp.placeholder = p.name + " is thinking…"; inp.classList.remove("yourturn");
+      runBot(p, G.turnId);
+    }
+  }
+
+  function advance() {
+    const n = G.players.length;
+    for (let k = 1; k <= n; k++) {
+      const i = (G.cur + k) % n;
+      if (S.endless || G.players[i].lives > 0) { G.cur = i; return; }
+    }
+  }
+
+  function check(word) {
+    if (!word) return "Type a word first.";
+    if (!/^[a-z]+$/.test(word)) return "Letters only.";
+    if (!word.includes(G.prompt)) return `“${word.toUpperCase()}” doesn't contain ${G.prompt.toUpperCase()}.`;
+    if (G.used.has(word)) return `“${word.toUpperCase()}” was already used this round.`;
+    if (!DICT.has(word)) return `“${word.toUpperCase()}” isn't in the dictionary.`;
+    return null;
+  }
+
+  function submit(player, raw) {
+    if (G.over || G.players[G.cur] !== player) return false;
+    const word = raw.trim().toLowerCase();
+    const err = check(word);
+    if (err) {
+      player.typedState = "bad"; renderSeats();
+      if (player.human) { showMsg(err, "bad"); rejectFlash(); tone(180, 0.15, "square", 0.06); }
+      return false;
+    }
+    const t = (performance.now() - G.turnStart) / 1000;
+    G.used.add(word);
+    player.words++;
+    player.typed = word; player.typedState = "ok";
+    let gained = false;
+    for (const ch of word) if (S.alpha.includes(ch)) player.letters.add(ch);
+    if (S.alpha.every((c) => player.letters.has(c))) {
+      player.letters.clear();
+      if (player.lives < S.maxLives) { player.lives++; gained = true; }
+    }
+    if (player.human) {
+      G.stats.words.push(word); G.stats.times.push(t);
+      showMsg(gained ? "Bonus alphabet complete. +1 life!" : `${word.toUpperCase()} · ${t.toFixed(2)}s`, "good");
+      tone(gained ? 990 : 740, 0.12, "triangle", 0.1, gained ? 400 : 120);
+      renderStats();
+    }
+    log(`<b>${esc(player.name)}</b> <span class="w">${highlight(word, G.prompt)}</span>${gained ? " ♥+1" : ""}`);
+    renderLetters();
+    const now = performance.now();
+    if (G.bombEnd - now < S.minTurn * 1000) G.bombEnd = now + S.minTurn * 1000;
+    nextPrompt();
+    advance();
+    const keep = player;
+    startTurn();
+    keep.typedState = "ok"; keep.typed = word; renderSeats();
+    return true;
+  }
+
+  function explode() {
+    const p = G.players[G.cur];
+    const missedPrompt = G.prompt;
+    if (!S.endless) p.lives = Math.max(0, p.lives - 1);
+    $("boom").classList.remove("go"); void $("boom").offsetWidth; $("boom").classList.add("go");
+    boomSound();
+    const ex = solutions(missedPrompt).filter((w) => !G.used.has(w));
+    log(`<span class="x">💥 ${esc(p.name)} blew up on <b>${missedPrompt.toUpperCase()}</b></span>${p.lives === 0 && !S.endless ? " · out" : ""}`);
+    if (p.human) {
+      const sample = shortSample(ex, 6);
+      G.stats.missed.push({ prompt: missedPrompt, sample });
+      renderMissed();
+      showMsg(S.hints && sample.length ? `Boom. You could have played ${sample.slice(0, 3).map((w) => w.toUpperCase()).join(", ")}.` : "Boom. You lost a life.", "bad");
+    }
+    G.promptFails++;
+    if (G.promptFails >= S.age) nextPrompt();
+    const left = alive();
+    const humanDead = !S.endless && G.players[0].lives === 0;
+    if ((G.players.length > 1 && left.length <= 1) || (G.players.length === 1 && humanDead)) { endGame(left[0]); return; }
+    newBomb();
+    advance();
+    startTurn();
+  }
+
+  function endGame(winner) {
+    G.over = true;
+    $("endBtn").hidden = true;
+    clearBotTimers();
+    cancelAnimationFrame(raf);
+    $("arrow").hidden = true; $("bombWrap").classList.remove("shake");
+    const inp = $("wordInput"); inp.disabled = true; inp.classList.remove("yourturn"); inp.placeholder = "Round over";
+    renderSeats();
+    const st = G.stats, n = st.words.length;
+    let title, sub;
+    if (G.players.length === 1) { title = `${n} word${n === 1 ? "" : "s"}`; sub = "Solo round over."; }
+    else if (!winner) { title = "Round ended"; sub = `You played ${n} word${n === 1 ? "" : "s"}.`; }
+    else if (winner.human) { title = "You win!"; sub = `${n} words played.`; }
+    else { title = `${esc(winner.name)} wins`; sub = `You played ${n} word${n === 1 ? "" : "s"}.`; }
+    let best = null;
+    try { best = parseInt(localStorage.getItem("bp-best-solo") || "0", 10); if (G.players.length === 1 && n > best) { localStorage.setItem("bp-best-solo", String(n)); sub += " New personal best!"; } else if (G.players.length === 1 && best) sub += ` Best: ${best}.`; } catch (e) {}
+    $("overlayInner").innerHTML = `<h2>${title}</h2><p>${sub}</p><button class="btn" id="againBtn" type="button">Play again</button>`;
+    $("overlay").hidden = false;
+    $("againBtn").addEventListener("click", newGame);
+    log("Round over.", "h");
+  }
+
+  // ---------- bots ----------
+  function clearBotTimers() { G.botTimers.forEach(clearTimeout); G.botTimers = []; }
+  function later(fn, ms) { G.botTimers.push(setTimeout(fn, ms)); }
+  function runBot(p, turnId) {
+    const sk = SKILLS[p.skill];
+    const count = PROMPTS[G.prompt] || 1;
+    // Rarer prompts are harder to know: scale knowledge by log of how many words contain it.
+    const chance = Math.min(0.985, sk.know * (0.55 + 0.45 * Math.min(1, Math.log10(count) / 3)) + 0.1);
+    const think = rand(sk.react[0], sk.react[1]) * 1000 * (count < 100 ? 1.6 : 1);
+    later(() => {
+      if (G.turnId !== turnId || G.over) return;
+      let cands = solutions(G.prompt).filter((w) => !G.used.has(w));
+      if (!cands.length || Math.random() > chance) {
+        // Stall: sometimes type a wrong guess, then give up
+        const junk = G.prompt + pick(["s", "er", "ing", "ly", "x"]);
+        if (Math.random() < 0.5 && !DICT.has(junk)) typeOut(p, junk, sk, turnId, () => { p.typedState = "bad"; renderSeats(); });
+        return;
+      }
+      const short = cands.filter((w) => w.length <= (p.skill === "easy" ? 8 : 11));
+      if (short.length && Math.random() < 0.8) cands = short;
+      let word = pick(cands);
+      if (sk.bonus) {
+        const need = (w) => [...new Set(w)].filter((c) => S.alpha.includes(c) && !p.letters.has(c)).length;
+        const sample = Array.from({ length: 25 }, () => pick(cands));
+        word = sample.sort((a, b) => need(b) - need(a) || a.length - b.length)[0];
+      }
+      typeOut(p, word, sk, turnId, () => submit(p, word));
+    }, think);
+  }
+  function typeOut(p, word, sk, turnId, done) {
+    const cps = rand(sk.cps[0], sk.cps[1]);
+    let i = 0;
+    const step = () => {
+      if (G.turnId !== turnId || G.over) return;
+      i++; p.typed = word.slice(0, i); p.typedState = ""; renderSeat(p);
+      if (i < word.length) later(step, (1000 / cps) * rand(0.6, 1.5));
+      else later(done, rand(80, 220));
+    };
+    later(step, 1000 / cps);
+  }
+
+  // ---------- loop ----------
+  function tick(now) {
+    if (!G || G.over) return;
+    const total = G.bombEnd - G.bombStart, left = G.bombEnd - now;
+    const ring = $("ring");
+    if (S.showTimer) {
+      ring.style.display = $("ringBg").style.display = ""; ring.setAttribute("stroke-dashoffset", String(578 * (1 - Math.max(0, left) / total)));
+    } else ring.style.display = $("ringBg").style.display = "none";
+    $("spark").setAttribute("r", String(5 + Math.sin(now / 60) * 1.8 + Math.random()));
+    $("bombWrap").classList.toggle("shake", S.showTimer && left < 3000);
+    if (left <= 0) explode();
+    if (!G.over) raf = requestAnimationFrame(tick);
+  }
+
+  // ---------- rendering ----------
+  const esc = (s) => String(s).replace(/[&<>"']/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c]));
+  function highlight(word, p) {
+    const w = word.toLowerCase(), i = p ? w.indexOf(p) : -1;
+    if (i < 0) return esc(word);
+    return esc(word.slice(0, i)) + "<mark>" + esc(word.slice(i, i + p.length)) + "</mark>" + esc(word.slice(i + p.length));
+  }
+  function seatPos(i, n) {
+    const a = (i / n) * Math.PI * 2 - Math.PI / 2;
+    const r = window.innerWidth < 560 ? 35 : 39;
+    return { a, x: 50 + Math.cos(a) * r, y: 50 + Math.sin(a) * r };
+  }
+  function renderSeats() {
+    const box = $("seats"), n = G.players.length;
+    box.innerHTML = "";
+    G.players.forEach((p, i) => {
+      const { x, y } = seatPos(i, n);
+      const el = document.createElement("div");
+      el.className = "seat"; el.style.left = x + "%"; el.style.top = (n === 1 ? 86 : y) + "%";
+      el.innerHTML = `<div class="avatar" style="background:${p.color}">${esc(p.name[0].toUpperCase())}</div>
+        <div class="name">${esc(p.name)}${p.human ? "" : ` <small style="color:var(--muted);font-weight:500">${p.skill === "easy" ? "casual" : p.skill === "hard" ? "sweaty" : "regular"}</small>`}</div>
+        <div class="lives">${S.endless ? "∞" : "♥".repeat(p.lives) || "out"}</div>
+        <div class="typed"></div>`;
+      p.el = el;
+      box.appendChild(el);
+      renderSeat(p);
+    });
+    const arrow = $("arrow");
+    if (G.over || n === 1) arrow.hidden = true;
+    else {
+      arrow.hidden = false;
+      const { a } = seatPos(G.cur, n);
+      arrow.style.transform = `rotate(${a + Math.PI / 2}rad)`;
+    }
+  }
+  function renderSeat(p) {
+    if (!p.el) return;
+    const i = G.players.indexOf(p);
+    p.el.classList.toggle("turn", i === G.cur && !G.over);
+    p.el.classList.toggle("dead", !S.endless && p.lives === 0);
+    const t = p.el.querySelector(".typed");
+    t.className = "typed " + p.typedState;
+    t.innerHTML = highlight(p.typed, p.typedState === "ok" ? "" : G.prompt);
+  }
+  function renderLetters() {
+    const me = G ? G.players[0] : null, alpha = S ? S.alpha : "abcdefghijlmnopqrstuv".split("");
+    $("letters").innerHTML = alpha.map((c) => `<span class="${me && me.letters.has(c) ? "got" : ""}">${c.toUpperCase()}</span>`).join("");
+    $("lettersLeft").textContent = me ? `${alpha.length - me.letters.size} left` : "";
+  }
+  function renderStats() {
+    const st = G.stats, n = st.words.length;
+    $("sWords").textContent = n;
+    $("sAvg").textContent = n ? (st.times.reduce((a, b) => a + b, 0) / n).toFixed(2) + "s" : "–";
+    $("sFast").textContent = n ? Math.min(...st.times).toFixed(2) + "s" : "–";
+    $("sLong").textContent = n ? st.words.reduce((a, b) => (b.length > a.length ? b : a)).toUpperCase() : "–";
+  }
+  function renderMissed() {
+    const m = G.stats.missed;
+    $("missedCount").textContent = m.length;
+    $("missed").innerHTML = m.slice().reverse().map((x) => `<div><b>${x.prompt}</b> <span>${S.hints ? x.sample.join(" · ") : ""}</span></div>`).join("");
+  }
+  function shortSample(list, k) {
+    const short = list.filter((w) => w.length <= 9);
+    const src = short.length >= k ? short : list;
+    const out = new Set();
+    for (let i = 0; i < 60 && out.size < Math.min(k, src.length); i++) out.add(pick(src));
+    return [...out].sort((a, b) => a.length - b.length);
+  }
+  function log(html, cls = "") {
+    const li = document.createElement("li");
+    if (cls) li.className = cls;
+    li.innerHTML = html;
+    const ul = $("log"); ul.prepend(li);
+    while (ul.children.length > 80) ul.lastChild.remove();
+  }
+  let msgTimer = 0;
+  function showMsg(text, cls = "") {
+    const m = $("msg"); m.textContent = text; m.className = "msg " + cls;
+    clearTimeout(msgTimer); msgTimer = setTimeout(() => { m.textContent = ""; }, 4000);
+  }
+  function rejectFlash() { const i = $("wordInput"); i.classList.remove("reject"); void i.offsetWidth; i.classList.add("reject"); }
+
+  // ---------- input ----------
+  $("wordInput").addEventListener("input", (e) => {
+    if (!G || G.over) return;
+    const me = G.players[0];
+    e.target.value = e.target.value.replace(/[^a-zA-Z]/g, "");
+    me.typed = e.target.value.toLowerCase(); me.typedState = ""; renderSeat(me);
+  });
+  $("entryForm").addEventListener("submit", (e) => {
+    e.preventDefault();
+    if (!G || G.over) return;
+    const me = G.players[0], inp = $("wordInput");
+    if (G.players[G.cur] !== me) return;
+    if (submit(me, inp.value)) inp.value = "";
+    else inp.select();
+  });
+  $("endBtn").addEventListener("click", () => { if (G && !G.over) endGame(null); });
+  $("settings").addEventListener("submit", (e) => { e.preventDefault(); newGame(); });
+  $("optDiff").addEventListener("change", () => { $("customDiff").hidden = $("optDiff").value !== "custom"; });
+
+  // ---------- boot ----------
+  restoreSettings();
+  $("customDiff").hidden = $("optDiff").value !== "custom";
+  S = readSettings();
+  renderLetters();
+  if (!loadDictionary()) {
+    $("overlayInner").innerHTML = "<h2>Dictionary missing</h2><p>words.js didn't load. Keep it in the same folder as this page.</p>";
+    return;
+  }
+  const count = Object.keys(PROMPTS).length;
+  $("overlayInner").innerHTML = `<h2>Ready when you are</h2><p>${WORDS.length.toLocaleString()} words, ${count.toLocaleString()} prompts. Change the room in settings, or jump in with 3 bots.</p><button class="btn" id="startBtn" type="button">Start round</button>`;
+  $("startBtn").addEventListener("click", newGame);
+  $("prompt").textContent = "bomb".slice(0, 3);
+  $("promptCount").textContent = "";
+})();
+</script>
