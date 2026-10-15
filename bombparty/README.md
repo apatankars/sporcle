@@ -16,9 +16,14 @@ Open `index.html` in a browser. No server or install is needed; `words.js` must 
 
 Starting lives 2, max lives 3, minimum turn 5 s, prompt difficulty "500+ words" (prompts that at least 500 dictionary words contain), prompt changes after 2 failed turns, fuse 10–30 s. All of these can be changed in Room settings.
 
-## Practice extras
+## Training features
 
-Optional visible timer, example answers for every prompt you miss (the most common words that fit), answer-time stats, endless mode, and bots at three skill levels.
+- **Drill mode**: one prompt at a time against a visible timer (6 s by default). Answers under 2 s count as fast. Misses and slow answers come back a few prompts later in the same set. Types: Smart mix, My weak spots, Hard prompts, Prompts I haven't seen.
+- **Coach**: after each of your turns it rates your speed, says where the prompt usually sits in a word (start, middle or end), suggests shorter go-to words, reminds you of backup forms (-S, -ED, -ING) and points out words that would have picked up more bonus letters.
+- **Weak spots**: every prompt you see is remembered in this browser with your misses, average time and a mastery level. The worst ones are listed with go-to words and can be drilled, or mixed into play rounds.
+- **Progress**: a chart of your average answer time per session.
+- **Strategy tab**: a written strategy, a practice routine, and a cheat sheet of the prompts at your difficulty with the fewest everyday words.
+- **Pocket words**: when you have 6 or fewer bonus letters left, the bonus panel lists common words for each one.
 
 Bots only play words from an everyday-English frequency list: Casual bots know the ~6,000 most common words, Regular ~15,000, and Sweaty all ~34,000 plus the odd obscure Scrabble word when they're stuck. The frequency list is [hermitdave/FrequencyWords](https://github.com/hermitdave/FrequencyWords) (top 50k English words from subtitles, MIT license), filtered to words in the dictionary.
 
